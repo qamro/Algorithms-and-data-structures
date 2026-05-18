@@ -1,0 +1,343 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* ─────────────────────────────────────────
+   QUEUE BASE (shared by all functions)
+   ───────────────────────────────────────── */
+typedef struct Node {
+    int data;
+    struct Node* next;
+} Node;
+
+Node* createNode(int val) {
+    Node* n = (Node*)malloc(sizeof(Node));
+    n->data = val; n->next = NULL;
+    return n;
+}
+
+int isEmpty(Node* front) { return front == NULL; }
+
+void enqueue(Node** front, Node** rear, int val) {
+    Node* n = createNode(val);
+    if (!*rear) { *front = *rear = n; return; }
+    (*rear)->next = n;
+    *rear = n;
+}
+
+int dequeue(Node** front, Node** rear) {
+    if (isEmpty(*front)) return -1;
+    Node* tmp = *front;
+    int val = tmp->data;
+    *front = (*front)->next;
+    if (!*front) *rear = NULL;   /* queue became empty */
+    free(tmp);
+    return val;
+}
+
+int frontVal(Node* front) { return front ? front->data : -1; }
+int rearVal (Node* rear)  { return rear  ? rear->data  : -1; }
+
+int queueSize(Node* front) {
+    int c = 0; while (front) { c++; front = front->next; } return c;
+}
+
+void display(Node* front, const char* name) {
+    printf("  %s (front->rear): ", name);
+    if (!front) { printf("(empty)\n"); return; }
+    while (front) {
+        printf("[%d]%s", front->data, front->next ? "->" : "\n");
+        front = front->next;
+    }
+}
+
+/* ── helper: push/pop for internal use ── */
+void   stackPush(Node** top, int val) { Node* n = createNode(val); n->next = *top; *top = n; }
+int    stackPop (Node** top)          {
+    if (!*top) return -1;
+    Node* t = *top; int v = t->data; *top = t->next; free(t); return v;
+}
+
+/* ─────────────────────────────────────────
+   IDEA 1 — MERGE TWO QUEUES INTO A THIRD
+   Order: all of Q1 first, then Q2
+   ───────────────────────────────────────── */
+void mergeTwoQueues(Node** q1f, Node** q1r,
+                    Node** q2f, Node** q2r,
+                    Node** q3f, Node** q3r) {
+    /* drain Q1 into Q3 */
+    while (!isEmpty(*q1f))
+        enqueue(q3f, q3r, dequeue(q1f, q1r));
+
+    /* drain Q2 into Q3 */
+    while (!isEmpty(*q2f))
+        enqueue(q3f, q3r, dequeue(q2f, q2r));
+}
+
+/* ─────────────────────────────────────────
+   IDEA 2 — COPY A QUEUE (preserve original)
+   ───────────────────────────────────────── */
+void copyQueue(Node* srcFront,
+               Node** dstFront, Node** dstRear) {
+    Node* cur = srcFront;
+    while (cur) {
+        enqueue(dstFront, dstRear, cur->data);
+        cur = cur->next;
+    }
+}
+
+/* ─────────────────────────────────────────
+   IDEA 3 — SORT A QUEUE (ascending front=min)
+   Strategy: selection sort using dequeue/enqueue
+   ───────────────────────────────────────── */
+void sortQueue(Node** front, Node** rear) {
+    int size = queueSize(*front);
+    for (int i = 0; i < size; i++) {
+        /* find minimum in unsorted part (first size-i elements) */
+        int minVal = frontVal(*front);
+        int count  = size - i;
+
+        /* rotate to find min */
+        for (int j = 0; j < count; j++) {
+            int cur = dequeue(front, rear);
+            if (cur < minVal) minVal = cur;
+            enqueue(front, rear, cur);
+        }
+
+        /* rotate again: move everything except minVal to the back once */
+        for (int j = 0; j < count; j++) {
+            int cur = dequeue(front, rear);
+            if (cur == minVal && minVal != -99999) {
+                minVal = -99999;  /* mark as used */
+            } else {
+                enqueue(front, rear, cur);
+            }
+        }
+        enqueue(front, rear, minVal == -99999 ? -99999 : minVal);
+        /* push the found minimum to the rear of the "sorted" section */
+        /* Note: sorted elements accumulate at the rear */
+    }
+}
+
+/* Cleaner sort: use a stack as helper */
+void sortQueueWithStack(Node** front, Node** rear) {
+    Node* stk = NULL;
+
+    /* dump queue into stack (stack has reversed order) */
+    while (!isEmpty(*front))
+        stackPush(&stk, dequeue(front, rear));
+
+    /* insertion-sort style: put stack elements back into sorted queue */
+    while (stk) {
+        int cur = stackPop(&stk);
+        int count = queueSize(*front);
+        int placed = 0;
+
+        /* rotate queue to find the right position */
+        for (int i = 0; i < count; i++) {
+            if (!placed && frontVal(*front) > cur) {
+                enqueue(front, rear, cur);
+                placed = 1;
+            }
+            enqueue(front, rear, dequeue(front, rear));
+        }
+        if (!placed) enqueue(front, rear, cur);
+    }
+}
+
+/* ─────────────────────────────────────────
+   IDEA 4 — REVERSE A QUEUE (using a stack)
+   ───────────────────────────────────────── */
+void reverseQueue(Node** front, Node** rear) {
+    Node* stk = NULL;
+
+    /* dump queue into stack (reverses order) */
+    while (!isEmpty(*front))
+        stackPush(&stk, dequeue(front, rear));
+
+    /* dump stack back into queue */
+    while (stk)
+        enqueue(front, rear, stackPop(&stk));
+}
+
+/* ─────────────────────────────────────────
+   IDEA 5 — PALINDROME CHECK using a queue
+   Compare queue front-to-back with a stack
+   ───────────────────────────────────────── */
+int isPalindrome(char* s) {
+    int len = strlen(s);
+    Node* qf = NULL, *qr = NULL;
+    Node* stk = NULL;
+
+    /* enqueue all characters */
+    for (int i = 0; i < len; i++) enqueue(&qf, &qr, s[i]);
+
+    /* push first half onto stack */
+    int half = len / 2;
+    for (int i = 0; i < half; i++) stackPush(&stk, dequeue(&qf, &qr));
+
+    /* skip middle character if odd length */
+    if (len % 2 != 0) dequeue(&qf, &qr);
+
+    /* compare stack (reversed first half) with remaining queue (second half) */
+    while (!isEmpty(qf)) {
+        if (stackPop(&stk) != dequeue(&qf, &qr)) return 0;
+    }
+    return 1;
+}
+
+/* ─────────────────────────────────────────
+   IDEA 6 — BALANCED PARENTHESES using queue
+   Queue stores open brackets; match on close
+   (Less natural than stack but tests your mind)
+   ───────────────────────────────────────── */
+int matches(int open, int close) {
+    return (open=='(' && close==')') ||
+           (open=='[' && close==']') ||
+           (open=='{' && close=='}');
+}
+
+int isBalanced(char* s) {
+    /* We use a stack internally because that's the correct tool.
+       The queue here stores the expression characters for processing. */
+    Node* qf = NULL, *qr = NULL;
+    Node* stk = NULL;
+
+    for (int i = 0; s[i]; i++) enqueue(&qf, &qr, s[i]);
+
+    while (!isEmpty(qf)) {
+        char c = (char)dequeue(&qf, &qr);
+        if (c=='(' || c=='[' || c=='{') stackPush(&stk, c);
+        else if (c==')' || c==']' || c=='}') {
+            if (!stk || !matches(stackPop(&stk), c)) return 0;
+        }
+    }
+    return stk == NULL;
+}
+
+/* ─────────────────────────────────────────
+   IDEA 7 — DELETE ELEMENT AT POSITION K
+   Rotate the queue, skip at position k
+   ───────────────────────────────────────── */
+void deleteAtPosition(Node** front, Node** rear, int k) {
+    int size = queueSize(*front);
+    if (k < 0 || k >= size) { printf("  [!] Position out of range.\n"); return; }
+
+    for (int i = 0; i < size; i++) {
+        int val = dequeue(front, rear);
+        if (i == k) {
+            printf("  [+] Deleted element %d at position %d.\n", val, k);
+            continue;  /* skip this one — effectively deletes it */
+        }
+        enqueue(front, rear, val);
+    }
+}
+
+/* ─────────────────────────────────────────
+   IDEA 8 — ELEMENT-WISE SUM OF TWO QUEUES
+   Q3[i] = Q1[i] + Q2[i]
+   ───────────────────────────────────────── */
+void sumTwoQueues(Node* q1f, Node* q2f,
+                  Node** q3f, Node** q3r) {
+    Node* c1 = q1f, *c2 = q2f;
+    while (c1 || c2) {
+        int a = c1 ? c1->data : 0;
+        int b = c2 ? c2->data : 0;
+        enqueue(q3f, q3r, a + b);
+        if (c1) c1 = c1->next;
+        if (c2) c2 = c2->next;
+    }
+}
+
+/* ─────────────────────────────────────────
+   MAIN — demo every idea
+   ───────────────────────────────────────── */
+int main() {
+
+    printf("\n╔══════════════════════════════════════╗\n");
+    printf("║   QUEUE EXAM IDEAS — ALL DEMOS       ║\n");
+    printf("╚══════════════════════════════════════╝\n");
+
+    Node *f, *r, *f2, *r2, *f3, *r3;
+
+    /* ── IDEA 1: Merge ── */
+    printf("\n── IDEA 1: Merge two queues into a third ──\n");
+    f = r = NULL;  enqueue(&f,&r,10); enqueue(&f,&r,20); enqueue(&f,&r,30);
+    f2=r2=NULL;    enqueue(&f2,&r2,40); enqueue(&f2,&r2,50); enqueue(&f2,&r2,60);
+    f3=r3=NULL;
+    display(f,  "Q1 before");
+    display(f2, "Q2 before");
+    mergeTwoQueues(&f,&r, &f2,&r2, &f3,&r3);
+    display(f3, "Q3 merged");
+    while (!isEmpty(f3)) dequeue(&f3,&r3);
+
+    /* ── IDEA 2: Copy ── */
+    printf("\n── IDEA 2: Copy a queue ──\n");
+    f=r=NULL; enqueue(&f,&r,1); enqueue(&f,&r,2); enqueue(&f,&r,3); enqueue(&f,&r,4);
+    f2=r2=NULL;
+    copyQueue(f, &f2, &r2);
+    display(f,  "Original");
+    display(f2, "Copy    ");
+    while (!isEmpty(f))  dequeue(&f,&r);
+    while (!isEmpty(f2)) dequeue(&f2,&r2);
+
+    /* ── IDEA 3: Sort ── */
+    printf("\n── IDEA 3: Sort a queue (front = smallest) ──\n");
+    f=r=NULL;
+    enqueue(&f,&r,34); enqueue(&f,&r,3); enqueue(&f,&r,31);
+    enqueue(&f,&r,98); enqueue(&f,&r,92); enqueue(&f,&r,23);
+    display(f, "Before sort");
+    sortQueueWithStack(&f, &r);
+    display(f, "After  sort");
+    while (!isEmpty(f)) dequeue(&f,&r);
+
+    /* ── IDEA 4: Reverse ── */
+    printf("\n── IDEA 4: Reverse a queue ──\n");
+    f=r=NULL;
+    enqueue(&f,&r,1); enqueue(&f,&r,2); enqueue(&f,&r,3);
+    enqueue(&f,&r,4); enqueue(&f,&r,5);
+    display(f, "Before reverse");
+    reverseQueue(&f, &r);
+    display(f, "After  reverse");
+    while (!isEmpty(f)) dequeue(&f,&r);
+
+    /* ── IDEA 5: Palindrome ── */
+    printf("\n── IDEA 5: Palindrome check ──\n");
+    char* words[] = { "racecar", "hello", "level", "world", "madam" };
+    for (int i = 0; i < 5; i++)
+        printf("  \"%s\" -> %s\n", words[i],
+               isPalindrome(words[i]) ? "PALINDROME" : "NOT palindrome");
+
+    /* ── IDEA 6: Balanced parentheses ── */
+    printf("\n── IDEA 6: Balanced parentheses ──\n");
+    char* exprs[] = { "({[]})", "([)]", "{[]}", "(((", "(())" };
+    for (int i = 0; i < 5; i++)
+        printf("  \"%s\" -> %s\n", exprs[i],
+               isBalanced(exprs[i]) ? "BALANCED" : "NOT balanced");
+
+    /* ── IDEA 7: Delete at position ── */
+    printf("\n── IDEA 7: Delete element at position k ──\n");
+    f=r=NULL;
+    enqueue(&f,&r,10); enqueue(&f,&r,20); enqueue(&f,&r,30);
+    enqueue(&f,&r,40); enqueue(&f,&r,50);
+    display(f, "Before (delete pos 2)");
+    deleteAtPosition(&f, &r, 2);
+    display(f, "After               ");
+    while (!isEmpty(f)) dequeue(&f,&r);
+
+    /* ── IDEA 8: Element-wise sum ── */
+    printf("\n── IDEA 8: Element-wise sum of two queues ──\n");
+    f=r=NULL;   enqueue(&f,&r,1);  enqueue(&f,&r,2);  enqueue(&f,&r,3);
+    f2=r2=NULL; enqueue(&f2,&r2,10); enqueue(&f2,&r2,20); enqueue(&f2,&r2,30);
+    f3=r3=NULL;
+    display(f,  "Queue A ");
+    display(f2, "Queue B ");
+    sumTwoQueues(f, f2, &f3, &r3);
+    display(f3, "A + B   ");
+    while (!isEmpty(f))  dequeue(&f,&r);
+    while (!isEmpty(f2)) dequeue(&f2,&r2);
+    while (!isEmpty(f3)) dequeue(&f3,&r3);
+
+    printf("\n--- Done ---\n");
+    return 0;
+}

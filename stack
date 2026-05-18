@@ -1,0 +1,228 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+typedef struct Node {
+    int data;
+    struct Node* next;
+} Node;
+
+Node* createNode(int val) {
+    Node* n = (Node*)malloc(sizeof(Node));
+    n->data = val; n->next = NULL;
+    return n;
+}
+int  isEmpty(Node* top)       { return top == NULL; }
+void push(Node** top, int val){ Node* n = createNode(val); n->next = *top; *top = n; }
+int  pop (Node** top)         {
+    if (isEmpty(*top)) return -1;
+    Node* tmp = *top; int val = tmp->data;
+    *top = (*top)->next; free(tmp); return val;
+}
+int  peek(Node* top)          { return isEmpty(top) ? -1 : top->data; }
+
+void display(Node* top, const char* name) {
+    printf("  %s (top->bot): ", name);
+    if (!top) { printf("(empty)\n"); return; }
+    while (top) { printf("[%d]%s", top->data, top->next ? "->" : "\n"); top = top->next; }
+}
+
+
+
+Node* mergeTwoStacks(Node** s1, Node** s2) {
+    Node* s3   = NULL;
+    Node* tmp  = NULL;
+
+   
+    while (!isEmpty(*s1)) push(&tmp, pop(s1));
+    
+    while (!isEmpty(tmp))  push(&s3, pop(&tmp));
+
+  
+    while (!isEmpty(*s2)) push(&tmp, pop(s2));
+    /* Step 4: push tmp into S3 → S2 sits below S1 */
+    while (!isEmpty(tmp))  push(&s3, pop(&tmp));
+
+    return s3;
+}
+
+
+Node* copyStack(Node* src) {
+    Node* tmp = NULL;
+    Node* copy = NULL;
+    /* dump into tmp (reverses order) */
+    Node* cur = src;
+    while (cur) { push(&tmp, cur->data); cur = cur->next; }
+    /* dump tmp into copy (restores order) */
+    while (!isEmpty(tmp)) push(&copy, pop(&tmp));
+    return copy;
+}
+
+
+void sortStack(Node** top) {
+    Node* sorted = NULL;
+    while (!isEmpty(*top)) {
+        int cur = pop(top);
+       
+        while (!isEmpty(sorted) && peek(sorted) < cur)
+            push(top, pop(&sorted));
+        push(&sorted, cur);
+    }
+    *top = sorted;
+}
+
+
+void insertAtBottom(Node** top, int val) {
+    if (isEmpty(*top)) { push(top, val); return; }
+    int tmp = pop(top);
+    insertAtBottom(top, val);
+    push(top, tmp);
+}
+void reverseStack(Node** top) {
+    if (isEmpty(*top)) return;
+    int val = pop(top);
+    reverseStack(top);
+    insertAtBottom(top, val);
+}
+
+
+int isPalindrome(char* s) {
+    int len = strlen(s);
+    Node* stk = NULL;
+
+    for (int i = 0; i < len / 2; i++) push(&stk, s[i]);
+
+    int start = (len % 2 == 0) ? len / 2 : len / 2 + 1;
+    for (int i = start; i < len; i++) {
+        if (pop(&stk) != s[i]) return 0;
+    }
+    return 1;
+}
+
+
+int matches(int open, int close) {
+    return (open == '(' && close == ')') ||
+           (open == '[' && close == ']') ||
+           (open == '{' && close == '}');
+}
+int isBalanced(char* s) {
+    Node* stk = NULL;
+    for (int i = 0; s[i]; i++) {
+        char c = s[i];
+        if (c=='(' || c=='[' || c=='{') push(&stk, c);
+        else if (c==')' || c==']' || c=='}') {
+            if (isEmpty(stk) || !matches(pop(&stk), c)) return 0;
+        }
+    }
+    return isEmpty(stk);
+}
+
+
+void deleteMiddle(Node** top, int k, int size) {
+    if (isEmpty(*top) || k == size / 2) { pop(top); return; }
+    int val = pop(top);
+    deleteMiddle(top, k + 1, size);
+    push(top, val);
+}
+
+int stackSize(Node* top) {
+    int c = 0; while (top) { c++; top = top->next; } return c;
+}
+
+
+Node* sumTwoStacks(Node* s1, Node* s2) {
+    Node* s3 = NULL;
+    Node* tmp1 = NULL, *tmp2 = NULL;
+
+
+    Node* cur = s1; while (cur) { push(&tmp1, cur->data); cur = cur->next; }
+    cur = s2;       while (cur) { push(&tmp2, cur->data); cur = cur->next; }
+
+
+    while (!isEmpty(tmp1) || !isEmpty(tmp2)) {
+        int a = isEmpty(tmp1) ? 0 : pop(&tmp1);
+        int b = isEmpty(tmp2) ? 0 : pop(&tmp2);
+        push(&s3, a + b);
+    }
+    return s3;
+}
+
+int main() {
+
+    printf("\n╔══════════════════════════════════════╗\n");
+    printf("║   STACK EXAM IDEAS — ALL DEMOS       ║\n");
+    printf("╚══════════════════════════════════════╝\n");
+
+  
+    printf("\n── IDEA 1: Merge two stacks into a third ──\n");
+    Node* s1 = NULL; push(&s1,10); push(&s1,20); push(&s1,30);
+    Node* s2 = NULL; push(&s2,40); push(&s2,50); push(&s2,60);
+    display(s1, "S1 before");
+    display(s2, "S2 before");
+    Node* s3 = mergeTwoStacks(&s1, &s2);
+    display(s3, "S3 merged ");
+    /* free s3 */
+    while (!isEmpty(s3)) pop(&s3);
+
+
+    printf("\n── IDEA 2: Copy a stack ──\n");
+    Node* orig = NULL; push(&orig,1); push(&orig,2); push(&orig,3); push(&orig,4);
+    Node* clone = copyStack(orig);
+    display(orig,  "Original  ");
+    display(clone, "Copy      ");
+    while (!isEmpty(orig))  pop(&orig);
+    while (!isEmpty(clone)) pop(&clone);
+
+  
+    printf("\n── IDEA 3: Sort a stack (top = smallest) ──\n");
+    Node* st = NULL; push(&st,34); push(&st,3); push(&st,31); push(&st,98); push(&st,92); push(&st,23);
+    display(st, "Before sort");
+    sortStack(&st);
+    display(st, "After sort ");
+    while (!isEmpty(st)) pop(&st);
+
+   
+    printf("\n── IDEA 4: Reverse a stack in place ──\n");
+    Node* rv = NULL; push(&rv,1); push(&rv,2); push(&rv,3); push(&rv,4); push(&rv,5);
+    display(rv, "Before reverse");
+    reverseStack(&rv);
+    display(rv, "After  reverse");
+    while (!isEmpty(rv)) pop(&rv);
+
+    printf("\n── IDEA 5: Palindrome check ──\n");
+    char* words[] = { "racecar", "hello", "level", "world", "madam" };
+    for (int i = 0; i < 5; i++)
+        printf("  \"%s\" -> %s\n", words[i], isPalindrome(words[i]) ? "PALINDROME" : "NOT palindrome");
+
+   
+    printf("\n── IDEA 6: Balanced parentheses ──\n");
+    char* exprs[] = { "({[]})", "([)]", "{[]}", "(((" , "(())" };
+    for (int i = 0; i < 5; i++)
+        printf("  \"%s\" -> %s\n", exprs[i], isBalanced(exprs[i]) ? "BALANCED" : "NOT balanced");
+
+
+    printf("\n── IDEA 7: Delete middle element ──\n");
+    Node* mid = NULL;
+    push(&mid,1); push(&mid,2); push(&mid,3); push(&mid,4); push(&mid,5);
+    display(mid, "Before delete middle");
+    int sz = stackSize(mid);
+    deleteMiddle(&mid, 0, sz);
+    display(mid, "After  delete middle");
+    while (!isEmpty(mid)) pop(&mid);
+
+   
+    printf("\n── IDEA 8: Element-wise sum of two stacks ──\n");
+    Node* a = NULL; push(&a,1); push(&a,2); push(&a,3);
+    Node* b = NULL; push(&b,10); push(&b,20); push(&b,30);
+    display(a, "Stack A ");
+    display(b, "Stack B ");
+    Node* sum = sumTwoStacks(a, b);
+    display(sum, "A + B   ");
+    while (!isEmpty(a))   pop(&a);
+    while (!isEmpty(b))   pop(&b);
+    while (!isEmpty(sum)) pop(&sum);
+
+    printf("\n--- Done ---\n");
+    return 0;
+}
